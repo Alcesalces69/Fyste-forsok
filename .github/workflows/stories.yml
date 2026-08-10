@@ -1,0 +1,42 @@
+name: Publish next story
+
+on:
+  schedule:
+    # Tue/Thu/Sat 08:00 UTC = 18:00 AEST / 10:00 CEST
+    - cron: "0 8 * * 2,4,6"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (validate only, publish nothing)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish-story:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish next story in stories queue
+        env:
+          META_TOKEN: ${{ secrets.META_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          QUEUE_DIR: stories
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: python3 scripts/publish.py
+
+      - name: Commit stories -> posted move
+        run: |
+          git config user.name "wildr-social-bot"
+          git config user.email "actions@github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "Published story $(date -u +%F)"
+          git push
