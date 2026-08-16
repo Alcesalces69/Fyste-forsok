@@ -1,9 +1,10 @@
 name: Publish next story
 
 on:
-  schedule:
-    # Tue/Thu/Sat 08:00 UTC = 18:00 AEST / 10:00 CEST
-    - cron: "0 8 * * 2,4,6"
+  # Stories are paused for now — no schedule trigger. Re-enable the cron
+  # below once there are enough photos to run stories again.
+  # schedule:
+  #   - cron: "0 8 * * 2,4,6"
   workflow_dispatch:
     inputs:
       dry_run:
