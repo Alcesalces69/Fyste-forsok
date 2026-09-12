@@ -130,7 +130,7 @@ def main():
         fetched += 1
 
     (ROOT / "photos-index.json").write_text(
-        json.dumps(index, indent=2, ensure_ascii=False)
+        json.dumps(index, indent=2, ensure_ascii=False), encoding="utf-8"
     )
     print(f"Done. {fetched} new photos in assets/ ({len(index)} total known).")
 
