@@ -24,6 +24,7 @@ post.json format:
 import json
 import os
 import pathlib
+import posixpath
 import shutil
 import sys
 import time
@@ -180,6 +181,13 @@ def publish_instagram(ig_id, token, caption, image_urls):
     return result["id"]
 
 
+def fb_original_rel(rel: str) -> str:
+    """Prefer the uncropped source image for Facebook, if one was kept."""
+    d, name = posixpath.split(rel)
+    original = posixpath.join(d, "original", name)
+    return original if (ROOT / original).exists() else rel
+
+
 def publish_facebook(page_id, token, caption, image_urls):
     media = []
     for url in image_urls:
@@ -219,12 +227,16 @@ def main():
         if not (ROOT / rel).exists():
             sys.exit(f"Missing media file: {rel}")
     media_urls = [raw_url(rel) for rel in media_rels]
+    # Facebook handles a wider range of image sizes than Instagram, so give it
+    # the uncropped original where one was kept; Instagram keeps the 4:5 crop.
+    fb_media_urls = media_urls if video else [raw_url(fb_original_rel(rel)) for rel in media_rels]
 
     kind = "video" if video else f"{len(media_urls)} image(s)"
     print(f"Publishing {post_dir.name} [{fmt}]: {kind}")
     if dry:
         print("[dry-run] caption:\n" + caption)
-        print("[dry-run] urls:\n" + "\n".join(media_urls))
+        print("[dry-run] urls (instagram):\n" + "\n".join(media_urls))
+        print("[dry-run] urls (facebook):\n" + "\n".join(fb_media_urls))
         return
 
     token = os.environ["META_TOKEN"]
@@ -242,7 +254,7 @@ def main():
             )
         if "facebook" in platforms:
             results["facebook"] = publish_facebook_story(
-                page_id, token, media_urls[0], bool(video)
+                page_id, token, fb_media_urls[0], bool(video)
             )
     else:
         if "instagram" in platforms:
@@ -252,9 +264,9 @@ def main():
                 results["instagram"] = publish_instagram(ig_id, token, caption, media_urls)
         if "facebook" in platforms:
             if video:
-                results["facebook"] = publish_facebook_reel(page_id, token, caption, media_urls[0])
+                results["facebook"] = publish_facebook_reel(page_id, token, caption, fb_media_urls[0])
             else:
-                results["facebook"] = publish_facebook(page_id, token, caption, media_urls)
+                results["facebook"] = publish_facebook(page_id, token, caption, fb_media_urls)
 
     post["published"] = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **results}
     (post_dir / "post.json").write_text(json.dumps(post, indent=2, ensure_ascii=False))

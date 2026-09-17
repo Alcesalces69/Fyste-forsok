@@ -4,7 +4,9 @@
 Recursively walks the folder (including subfolders — e.g. one per animal
 species) via Drive's public embedded-folder view, downloads every image via
 the public thumbnail endpoint, then center-crops to 4:5 (1080x1350) or, with
---story, 9:16 (1080x1920) JPEG using Pillow.
+--story, 9:16 (1080x1920) JPEG using Pillow. The uncropped original is kept
+alongside in an "original" subfolder (e.g. assets/original/) so publish.py
+can post the native aspect ratio to Facebook while Instagram gets the crop.
 
 The Drive folder must be shared as "Anyone with the link can view".
 
@@ -125,6 +127,9 @@ def main():
             dest.unlink(missing_ok=True)
             continue
         if not args.landscape:
+            original_dir = ASSETS / "original"
+            original_dir.mkdir(exist_ok=True)
+            (original_dir / dest.name).write_bytes(dest.read_bytes())
             to_portrait(dest, TARGET_W, TARGET_H)
         print(f"  OK   {dest.name}  [{group}]")
         fetched += 1
