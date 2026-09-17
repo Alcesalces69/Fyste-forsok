@@ -1,0 +1,33 @@
+name: Fix Facebook post image
+
+on:
+  workflow_dispatch:
+    inputs:
+      post_dir:
+        description: "Path to the posted/<folder> to fix, e.g. posted/003-raudrev-to"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Delete + republish with original-format image
+        env:
+          META_TOKEN: ${{ secrets.META_TOKEN }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          POST_DIR: ${{ inputs.post_dir }}
+        run: python3 scripts/fix_facebook_photo.py
+
+      - name: Commit updated post record
+        run: |
+          git config user.name "wildr-social-bot"
+          git config user.email "actions@github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "Fix Facebook image for ${{ inputs.post_dir }} (original format)"
+          git push
