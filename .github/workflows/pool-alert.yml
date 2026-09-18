@@ -1,0 +1,43 @@
+name: Pool alert (14 days of unique photos left)
+
+on:
+  workflow_run:
+    workflows: ["Publish next social post"]
+    types: [completed]
+  schedule:
+    - cron: "30 12 * * *"
+  workflow_dispatch:
+    inputs:
+      test_issue:
+        description: "Open a clearly-marked TEST issue to check the notification channel"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: pool-alert
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check remaining unique photos
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE_TEST_ISSUE: ${{ inputs.test_issue && '1' || '0' }}
+        run: python3 scripts/check_pool.py
+
+      - name: Commit round state
+        run: |
+          git config user.name "wildr-social-bot"
+          git config user.email "actions@github.com"
+          git add round-state.json
+          git diff --cached --quiet || git commit -m "Update round state"
+          git pull --rebase
+          git push
