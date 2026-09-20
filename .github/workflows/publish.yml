@@ -2,25 +2,48 @@ name: Publish next social post
 
 on:
   schedule:
-    # Tue/Fri/Sun 08:00 UTC = 10:00 CEST
-    - cron: "0 8 * * 2,5,0"
+    # GitHub delays scheduled runs by several hours (observed 1-5 h, once 14 h),
+    # so the cron fires early on purpose and the "wait" job sleeps until
+    # 08:00 UTC (10:00 CEST / 09:00 CET). Off-peak minute on purpose.
+    - cron: "17 2 * * 2,5,0"
   workflow_dispatch:
     inputs:
       dry_run:
         description: "Dry run (validate only, publish nothing)"
         type: boolean
         default: false
+      force:
+        description: "Publish even if a post already went out today (UTC)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
-concurrency:
-  group: publish
-  cancel-in-progress: false
-
 jobs:
-  publish:
+  wait:
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - name: Sleep until 08:00 UTC
+        run: |
+          now=$(date -u +%s)
+          target=$(date -u -d "$(date -u +%F) 08:00:00" +%s)
+          if [ "$now" -lt "$target" ]; then
+            echo "Sleeping $((target - now))s until 08:00 UTC"
+            sleep $((target - now))
+          else
+            echo "Already past 08:00 UTC - publishing immediately"
+          fi
+
+  publish:
+    needs: wait
+    if: ${{ !cancelled() && (needs.wait.result == 'success' || needs.wait.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: publish
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 
@@ -30,6 +53,7 @@ jobs:
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          FORCE: ${{ inputs.force && '1' || '0' }}
         run: python3 scripts/publish.py
 
       - name: Commit queue -> posted move

@@ -204,6 +204,18 @@ def publish_facebook(page_id, token, caption, image_urls):
     return result["id"]
 
 
+def feed_post_already_published_today() -> bool:
+    """True if a feed post already went out today (UTC)."""
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    for f in (ROOT / "posted").glob("*/post.json"):
+        post = json.loads(f.read_text(encoding="utf-8"))
+        if post.get("format", "feed") == "story":
+            continue
+        if str(post.get("published", {}).get("at", "")).startswith(today):
+            return True
+    return False
+
+
 def main():
     dry = os.environ.get("DRY_RUN") == "1"
     queue_dir = os.environ.get("QUEUE_DIR", "queue")
@@ -211,8 +223,15 @@ def main():
     if not queue:
         print(f"{queue_dir}/ empty — nothing to publish. Refill it!")
         return
+    if (
+        queue_dir == "queue"
+        and os.environ.get("FORCE") != "1"
+        and feed_post_already_published_today()
+    ):
+        print("A feed post was already published today (UTC) — skipping. Set FORCE=1 to override.")
+        return
     post_dir = queue[0]
-    post = json.loads((post_dir / "post.json").read_text())
+    post = json.loads((post_dir / "post.json").read_text(encoding="utf-8"))
     caption = post["caption"].strip()
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     sha = os.environ.get("GITHUB_SHA", "main")
@@ -269,7 +288,9 @@ def main():
                 results["facebook"] = publish_facebook(page_id, token, caption, fb_media_urls)
 
     post["published"] = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **results}
-    (post_dir / "post.json").write_text(json.dumps(post, indent=2, ensure_ascii=False))
+    (post_dir / "post.json").write_text(
+        json.dumps(post, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     dest = ROOT / "posted" / post_dir.name
     shutil.move(str(post_dir), str(dest))
     print(f"Moved {post_dir.name} -> posted/")
